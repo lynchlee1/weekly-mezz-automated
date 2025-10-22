@@ -7,6 +7,12 @@ import sys
 import os
 import re
 
+def resource_dir():
+    # Where resources live (config.json) for script vs frozen EXE
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
 # Fix DPI scaling issues on Windows
 try:
     from ctypes import windll
@@ -191,7 +197,8 @@ class DateRangeGUI:
         """Load the current API key directly from JSON file"""
         try:
             import json
-            with open('config.json', 'r', encoding='utf-8') as f:
+            config_path = os.path.join(resource_dir(), 'config.json')
+            with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 return config.get('API_KEY', '')
         except Exception as e:
@@ -212,7 +219,8 @@ class DateRangeGUI:
             
             # Load current config
             try:
-                with open('config.json', 'r', encoding='utf-8') as f:
+                config_path = os.path.join(resource_dir(), 'config.json')
+                with open(config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
             except FileNotFoundError:
                 config = {}
@@ -221,7 +229,8 @@ class DateRangeGUI:
             config['API_KEY'] = new_api_key
             
             # Save updated config
-            with open('config.json', 'w', encoding='utf-8') as f:
+            config_path = os.path.join(resource_dir(), 'config.json')
+            with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             
             # Update the current API key

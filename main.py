@@ -9,9 +9,17 @@ import sys
 import os
 import json
 
+def resource_dir() -> str:
+    """Return the directory where resources (like config.json) live.
+    In a frozen EXE, use the executable's directory; otherwise use this file's directory.
+    """
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
 def get_api_key():
-    """Get the current API key directly from JSON file"""
-    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    """Get the current API key directly from JSON file in resource directory"""
+    config_path = os.path.join(resource_dir(), 'config.json')
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
