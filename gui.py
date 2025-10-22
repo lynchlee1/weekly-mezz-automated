@@ -188,13 +188,38 @@ class DateRangeGUI:
         thread.start()
     
     def execute_script(self, from_date, to_date):
-        """Execute the main script"""
+        """Execute the data processing directly"""
         try:
-            # Run the main script with command line arguments
-            result = subprocess.run([sys.executable, "main.py", from_date, to_date], 
-                                 capture_output=True, text=True, cwd=os.getcwd())
+            # Import and run the data processing functions directly
+            import main
             
-            # Update GUI in main thread
+            # Run the data processing
+            reports = main.get_weekly_reports(from_date, to_date)
+            
+            filter_words = [
+                '감자', '증자', '합병', '분할', '해산', '증여',
+                '자기', '자본', '자산', '담보', 
+                '양수도', '양수', '양도', '처분', 
+                '선택권', '소조',  '보증', 
+            ]
+
+            filtered_reports = []
+            for report in reports:
+                if any(word in report['report_nm'] for word in filter_words): continue
+                contain_keys = ['stock_code', 'report_nm', 'corp_code', 'corp_name', 'rcept_no', 'corp_cls']
+                filtered_report = {key: report[key] for key in contain_keys if key in report}
+                filtered_reports.append(filtered_report)
+            
+            # Run the table processing
+            main.table_to_xlsx(filtered_reports)
+            
+            # Create a mock result object
+            class MockResult:
+                def __init__(self):
+                    self.returncode = 0
+                    self.stderr = ""
+            
+            result = MockResult()
             self.root.after(0, self.script_finished, result)
             
         except Exception as e:

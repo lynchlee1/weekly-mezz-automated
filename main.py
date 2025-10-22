@@ -244,8 +244,19 @@ def table_to_xlsx(data):
     ]
 
     df = pd.DataFrame(output_entries, columns=columns)
-    df.to_excel('output.xlsx', index=False)
-    print("Saved results to output.xlsx")
+    
+    # Get the directory where the executable is located
+    import os
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        exe_dir = os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        exe_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    output_path = os.path.join(exe_dir, 'output.xlsx')
+    df.to_excel(output_path, index=False)
+    print(f"Saved results to {output_path}")
 
 if __name__ == "__main__":
     import sys

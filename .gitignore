@@ -23,3 +23,8 @@ Thumbs.db
 
 *.tmp
 *.temp
+
+# PyInstaller build files
+build/
+dist/
+*.spec
