@@ -192,6 +192,7 @@ class DateRangeGUI:
         try:
             # Import and run the data processing functions directly
             import main
+            import sys
             
             # Run the data processing
             reports = main.get_weekly_reports(from_date, to_date)
