@@ -1,0 +1,8 @@
+# Weekly Mezz Automated
+
+주간 메자닌 발행내역을 자동으로 수집하는 프로그램입니다. 
+
+- API 키를 configs.py에 넣어야 작동합니다.
+
+- DART API에서 발행된 보고서를 수집
+- 날짜 범위 입력시 주요 정보를 output.xlsx로 저장
