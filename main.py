@@ -123,8 +123,6 @@ def table_to_xlsx(data):
         corp_name = report['corp_name']
         rcept_no = report['rcept_no']
         corp_cls = report['corp_cls']
-        if corp_name == "알파녹스" or corp_name == "알엔투테크놀로지":
-            print(f"====={report_nm},{corp_code},{rcept_no}=====")
 
         if '전환' in report_nm: report_type = 'CB'
         elif '교환' in report_nm: report_type = 'EB'
@@ -163,8 +161,6 @@ def table_to_xlsx(data):
             for row_idx, tr in enumerate(first_table.find_all('tr')):
                 row_text = tr.get_text(' | ', strip=True)
                 keyword_text = split(row_text)[0]
-                if corp_name == "알파녹스" or corp_name == "알엔투테크놀로지":
-                    print("row_text:", row_text)
 
                 if '납입일' in keyword_text: result_list[1] = parse_date(split(row_text)[1])
                 if '사채의 종류' in keyword_text: result_list[5] = split(row_text)[2]
@@ -198,7 +194,7 @@ def table_to_xlsx(data):
                 if '교환대상' in keyword_text: result_list[30] = split(row_text)[2]
                 elif '전환에 따라' in keyword_text: result_list[30] = split(row_text)[2]
 
-                if '옵션에 관한' in keyword_text: result_list[31] = split(row_text)[1]
+                if '옵션에 관한' in keyword_text: result_list[31] = ' | '.join(split(row_text)[1:])
 
             try:
                 date_format = "%Y-%m-%d"
