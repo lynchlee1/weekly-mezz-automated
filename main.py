@@ -1,4 +1,4 @@
-from configs import API_KEY
+# We'll load API_KEY dynamically to allow for runtime updates
 from datetime import datetime, timezone, timedelta
 import requests
 from bs4 import BeautifulSoup
@@ -7,6 +7,18 @@ from io import BytesIO
 import pandas as pd
 import sys
 import os
+import json
+
+def get_api_key():
+    """Get the current API key directly from JSON file"""
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            return config.get('API_KEY', '')
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        print(f"Error loading API key from JSON: {e}")
+        return ""
 
 def get_weekly_reports(start_date, end_date):
     '''
@@ -15,7 +27,7 @@ def get_weekly_reports(start_date, end_date):
     '''
     base_url = "https://opendart.fss.or.kr/api/list.json"
     base_params = {
-        'crtfc_key': API_KEY,
+        'crtfc_key': get_api_key(),
         'bgn_de': start_date,
         'end_de': end_date,
         'last_reprt_at': 'Y',
@@ -85,7 +97,7 @@ def unpack(rcept_no: str) -> list:
     output: list of tables in the report
     '''
     source_download_url = "https://opendart.fss.or.kr/api/document.xml"
-    url = f"{source_download_url}?crtfc_key={API_KEY}&rcept_no={rcept_no}"
+    url = f"{source_download_url}?crtfc_key={get_api_key()}&rcept_no={rcept_no}"
     response = requests.get(url)
     
     all_tables = []
@@ -112,6 +124,47 @@ def unpack(rcept_no: str) -> list:
         pass
     
     return all_tables
+
+def full_unpack(rcept_no: str) -> str:
+    '''
+    input: rcept_no
+    output: all text content from all files in the ZIP as a single string (no empty lines, no lines that only have "-")
+    '''
+    source_download_url = "https://opendart.fss.or.kr/api/document.xml"
+    url = f"{source_download_url}?crtfc_key={get_api_key()}&rcept_no={rcept_no}"
+    response = requests.get(url)
+    all_text = ""
+    try:
+        with zipfile.ZipFile(BytesIO(response.content)) as zf:
+            file_list = zf.namelist()
+            for name in file_list:
+                with zf.open(name) as f:
+                    data = f.read()
+                    try:
+                        text = data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        print(f"Error decoding with utf-8: {name}")
+                        try:
+                            text = data.decode('cp949')
+                        except UnicodeDecodeError:
+                            print(f"Error decoding with cp949: {name}")
+                            text = None
+                    if text is not None:
+                        soup = BeautifulSoup(text, 'html.parser')
+                    for script in soup(["script", "style"]):
+                        script.decompose()
+                    file_text = soup.get_text()
+                    # Remove lines that are entirely empty or whitespace, and also lines that only have "-"
+                    filtered_lines = [
+                        line for line in file_text.splitlines()
+                        if line.strip() and line.strip() != "-"
+                    ]
+                    all_text += f"\n=== FILE: {name} ===\n"
+                    all_text += "\n".join(filtered_lines)
+                    all_text += "\n"
+    except zipfile.BadZipFile:
+        pass
+    return all_text
 
 def table_to_xlsx(data):
     filtered_reports = data
@@ -308,3 +361,27 @@ if __name__ == "__main__":
         except ImportError as e:
             print(f"Error launching GUI: {e}")
             sys.exit(1)
+
+# if __name__ == "__main__":
+#     zip_text = full_unpack("20251021000246")
+#     break_point = -1
+#     for i, line in enumerate(zip_text.splitlines()):
+#         if '특정인에 대한 대상자별 사채발행내역' in line:
+#             break_point = i
+#             break
+#     new_zip_text = zip_text.splitlines()[break_point:]
+
+#     fund_indices = [i for i, line in enumerate(new_zip_text) if '본건 펀드' in line]
+#     split_sections = []
+#     if fund_indices:
+#         for idx, start_idx in enumerate(fund_indices):
+#             # The start of this section is at '본건 펀드'
+#             section_start = start_idx
+#             if idx + 1 < len(fund_indices):
+#                 section_end = fund_indices[idx + 1]
+#             else:
+#                 section_end = len(new_zip_text)
+#             split_sections.append(new_zip_text[section_start:section_end])
+#         new_zip_text = split_sections
+#     for section in new_zip_text:
+#         print(section)

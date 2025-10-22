@@ -188,10 +188,12 @@ class DateRangeGUI:
         self.root.geometry(f'{width}x{height}+{x}+{y}')
     
     def load_api_key(self):
-        """Load the current API key from config.json"""
+        """Load the current API key directly from JSON file"""
         try:
-            import configs
-            return configs.API_KEY
+            import json
+            with open('config.json', 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config.get('API_KEY', '')
         except Exception as e:
             print(f"Error loading API key: {e}")
             return ""
@@ -205,18 +207,28 @@ class DateRangeGUI:
             return
         
         try:
-            # Update the JSON config file
-            import configs
-            configs.config["API_KEY"] = new_api_key
-            configs.save_config(configs.config)
+            # Update the JSON config file directly
+            import json
             
-            # Update the API_KEY variable in the configs module
-            configs.API_KEY = new_api_key
+            # Load current config
+            try:
+                with open('config.json', 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            except FileNotFoundError:
+                config = {}
+            
+            # Update API key
+            config['API_KEY'] = new_api_key
+            
+            # Save updated config
+            with open('config.json', 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
             
             # Update the current API key
             self.current_api_key = new_api_key
             
             print(f"API key updated successfully: {new_api_key}")
+            print(f"JSON file content: {json.dumps(config, indent=2)}")
             messagebox.showinfo("Success", "API 키가 성공적으로 변경되었습니다.")
             
         except Exception as e:
