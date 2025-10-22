@@ -190,9 +190,12 @@ class DateRangeGUI:
     def execute_script(self, from_date, to_date):
         """Execute the data processing directly"""
         try:
+            # Import required modules
+            import sys
+            import os
+            
             # Import and run the data processing functions directly
             import main
-            import sys
             
             # Run the data processing
             reports = main.get_weekly_reports(from_date, to_date)

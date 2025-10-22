@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 import zipfile
 from io import BytesIO
 import pandas as pd
+import sys
+import os
 
 def get_weekly_reports(start_date, end_date):
     '''
@@ -121,6 +123,8 @@ def table_to_xlsx(data):
         corp_name = report['corp_name']
         rcept_no = report['rcept_no']
         corp_cls = report['corp_cls']
+        if corp_name == "알파녹스" or corp_name == "알엔투테크놀로지":
+            print(f"====={report_nm},{corp_code},{rcept_no}=====")
 
         if '전환' in report_nm: report_type = 'CB'
         elif '교환' in report_nm: report_type = 'EB'
@@ -128,7 +132,13 @@ def table_to_xlsx(data):
         else: continue
         
         all_tables = unpack(rcept_no)
-        first_table = next((t for t in all_tables if '권면' in t.get_text()), None)
+        first_table = None
+        for table in all_tables:
+            table_text = table.get_text()
+            if '사채의 종류' in table_text and '권면' in table_text and '정정' not in table_text:
+                first_table = table
+                break
+    
         if first_table is not None:
             # Initialize the result list
             result_list = [""] * 32  # 0-31 indices
@@ -153,6 +163,8 @@ def table_to_xlsx(data):
             for row_idx, tr in enumerate(first_table.find_all('tr')):
                 row_text = tr.get_text(' | ', strip=True)
                 keyword_text = split(row_text)[0]
+                if corp_name == "알파녹스" or corp_name == "알엔투테크놀로지":
+                    print("row_text:", row_text)
 
                 if '납입일' in keyword_text: result_list[1] = parse_date(split(row_text)[1])
                 if '사채의 종류' in keyword_text: result_list[5] = split(row_text)[2]
@@ -164,9 +176,13 @@ def table_to_xlsx(data):
                 elif '교환가액' in keyword_text and '원' in keyword_text: 
                     if result_list[9] != "": continue
                     result_list[9] = parse_number(split(row_text)[1])
+                elif '행사가액' in keyword_text and '원' in keyword_text: 
+                    if result_list[9] != "": continue
+                    result_list[9] = parse_number(split(row_text)[1])
                 
                 if '전환가액 결정방법' in keyword_text: result_list[10] = split(row_text)[1]
                 elif '교환가액 결정방법' in keyword_text: result_list[10] = split(row_text)[1]
+                elif '행사가액 결정방법' in keyword_text: result_list[10] = split(row_text)[1]
 
                 if '사채만기일' in keyword_text: result_list[12] = parse_date(split(row_text)[1])
                 if '사채의 이율' in keyword_text: result_list[14] = split(row_text)[2]
@@ -246,7 +262,6 @@ def table_to_xlsx(data):
     df = pd.DataFrame(output_entries, columns=columns)
     
     # Get the directory where the executable is located
-    import os
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
         exe_dir = os.path.dirname(sys.executable)
@@ -259,7 +274,6 @@ def table_to_xlsx(data):
     print(f"Saved results to {output_path}")
 
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) == 3:
         from_date = sys.argv[1]
         to_date = sys.argv[2]
