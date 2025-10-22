@@ -5,6 +5,7 @@ import threading
 import subprocess
 import sys
 import os
+import re
 
 # Fix DPI scaling issues on Windows
 try:
@@ -17,7 +18,7 @@ class DateRangeGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Weekly Mezz Automated")
-        self.root.geometry("500x350")
+        self.root.geometry("500x500")
         self.root.resizable(False, False)
         
         # Configure style for better appearance
@@ -47,9 +48,26 @@ class DateRangeGUI:
         to_date_entry = ttk.Entry(main_frame, textvariable=self.to_date_var, width=20, font=("Segoe UI", 10))
         to_date_entry.grid(row=2, column=1, sticky=tk.W, padx=(15, 0), pady=8)
         
+        # API Key section
+        api_frame = ttk.LabelFrame(main_frame, text="API 설정", padding="10")
+        api_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=15)
+        
+        # Load current API key
+        self.current_api_key = self.load_api_key()
+        
+        ttk.Label(api_frame, text="").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.api_key_var = tk.StringVar(value=self.current_api_key)
+        api_key_entry = ttk.Entry(api_frame, textvariable=self.api_key_var, width=30, font=("Segoe UI", 9))
+        api_key_entry.grid(row=0, column=1, sticky=tk.W, padx=(15, 10), pady=5)
+        
+        # API Key button
+        api_button = ttk.Button(api_frame, text="변경", command=self.update_api_key, 
+                               style="Small.TButton", width=6)
+        api_button.grid(row=0, column=2, sticky=tk.W, pady=5)
+        
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=25)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=25)
         
         # Run button
         self.run_button = ttk.Button(button_frame, text="실행", command=self.run_script, 
@@ -63,12 +81,7 @@ class DateRangeGUI:
         
         # Progress bar
         self.progress = ttk.Progressbar(main_frame, mode='indeterminate', style="TProgressbar")
-        self.progress.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=15)
-        
-        # Status label
-        self.status_label = ttk.Label(main_frame, text="실행 준비 완료", foreground="#0d7efb", 
-                                    font=("Segoe UI", 9))
-        self.status_label.grid(row=5, column=0, columnspan=2, pady=8)
+        self.progress.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=15)
         
         # Configure grid weights
         root.columnconfigure(0, weight=1)
@@ -129,6 +142,19 @@ class DateRangeGUI:
                  background=[("active", "#e8e8e8"),
                            ("pressed", "#dcdcdc")])
         
+        # Configure small button style
+        style.configure("Small.TButton",
+                       font=("Segoe UI", 8, "bold"),
+                       foreground="white",
+                       background=blue,
+                       borderwidth=0,
+                       focuscolor="none",
+                       padding=(8, 4))
+        
+        style.map("Small.TButton",
+                 background=[("active", "#0a6bdf"),
+                           ("pressed", "#0859c7")])
+        
         # Configure progress bar
         style.configure("TProgressbar",
                        background=blue,
@@ -140,6 +166,17 @@ class DateRangeGUI:
         # Configure frame background
         style.configure("TFrame",
                        background=white)
+        
+        # Configure LabelFrame style
+        style.configure("TLabelframe",
+                       background=white,
+                       foreground=grey,
+                       font=("Segoe UI", 9, "bold"))
+        
+        style.configure("TLabelframe.Label",
+                       background=white,
+                       foreground=blue,
+                       font=("Segoe UI", 9, "bold"))
     
     def center_window(self):
         """Center the window on the screen"""
@@ -149,6 +186,42 @@ class DateRangeGUI:
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def load_api_key(self):
+        """Load the current API key from config.json"""
+        try:
+            import configs
+            return configs.API_KEY
+        except Exception as e:
+            print(f"Error loading API key: {e}")
+            return ""
+    
+    def update_api_key(self):
+        """Update the API key in config.json"""
+        new_api_key = self.api_key_var.get().strip()
+        
+        if not new_api_key:
+            messagebox.showerror("Error", "API 키를 입력해주세요.")
+            return
+        
+        try:
+            # Update the JSON config file
+            import configs
+            configs.config["API_KEY"] = new_api_key
+            configs.save_config(configs.config)
+            
+            # Update the API_KEY variable in the configs module
+            configs.API_KEY = new_api_key
+            
+            # Update the current API key
+            self.current_api_key = new_api_key
+            
+            print(f"API key updated successfully: {new_api_key}")
+            messagebox.showinfo("Success", "API 키가 성공적으로 변경되었습니다.")
+            
+        except Exception as e:
+            print(f"Error updating API key: {e}")
+            messagebox.showerror("Error", f"API 키 변경 중 오류가 발생했습니다: {str(e)}")
     
     def validate_date(self, date_string):
         """Validate date format YYYYMMDD"""
@@ -180,7 +253,6 @@ class DateRangeGUI:
         # Disable run button and start progress
         self.run_button.config(state='disabled')
         self.progress.start()
-        self.status_label.config(text="실행 중...", foreground="#0d7efb")
         
         # Run script in separate thread to prevent GUI freezing
         thread = threading.Thread(target=self.execute_script, args=(from_date, to_date))
@@ -235,17 +307,17 @@ class DateRangeGUI:
         self.run_button.config(state='normal')
         
         if result.returncode == 0:
-            self.status_label.config(text="실행 완료!", foreground="#0d7efb")
+            print("실행 완료!")
             messagebox.showinfo("완료", "스크립트가 성공적으로 완료되었습니다!\noutput.xlsx 파일을 확인하세요.")
         else:
-            self.status_label.config(text="오류 발생", foreground="#616365")
+            print("오류 발생")
             messagebox.showerror("오류", f"스크립트 실행 중 오류가 발생했습니다:\n{result.stderr}")
     
     def script_error(self, error_msg):
         """Handle script error"""
         self.progress.stop()
         self.run_button.config(state='normal')
-        self.status_label.config(text="오류 발생", foreground="#616365")
+        print("오류 발생")
         messagebox.showerror("오류", f"스크립트 실행 실패:\n{error_msg}")
 
 def main():

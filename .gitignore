@@ -1,4 +1,5 @@
 configs.py
+config.json
 output.xlsx
 
 __pycache__/
