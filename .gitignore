@@ -1,6 +1,6 @@
 configs.py
 config.json
-output.xlsx
+*.xlsx
 
 __pycache__/
 *.pyc
