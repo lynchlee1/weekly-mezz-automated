@@ -8,171 +8,14 @@ import pandas as pd
 import sys
 import os
 import json
+from sub import list_fund_participants
 
-def resource_dir() -> str:
-    """Return the directory where resources (like config.json) live.
-    In a frozen EXE, use the executable's directory; otherwise use this file's directory.
-    """
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+# Suppress BeautifulSoup XML parsing warnings
+from bs4 import XMLParsedAsHTMLWarning
+import warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
-def get_api_key():
-    """Get the current API key directly from JSON file in resource directory"""
-    config_path = os.path.join(resource_dir(), 'config.json')
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            return config.get('API_KEY', '')
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-        print(f"Error loading API key from JSON: {e}")
-        return ""
-
-def get_weekly_reports(start_date, end_date):
-    '''
-    input: start_date and end_date in string format %Y%m%d
-    output: list of reports between start_date and end_date
-    '''
-    base_url = "https://opendart.fss.or.kr/api/list.json"
-    base_params = {
-        'crtfc_key': get_api_key(),
-        'bgn_de': start_date,
-        'end_de': end_date,
-        'last_reprt_at': 'Y',
-        'pblntf_ty': 'B',
-        'page_count': "100"
-    }
-
-    results = []
-    page_no = 1
-    while True:
-        params = base_params.copy()
-        params['page_no'] = page_no
-        response = requests.get(base_url, params=params)
-        if response.json()['status'] != '000': break
-        results.extend(response.json()['list'])
-        if len(response.json()['list']) >= 100: 
-            page_no += 1
-        else: break
-    return results
-
-def weekly_range(date):
-    '''
-    input: date in string format %Y%m%d
-    output: monday and friday in string format %Y%m%d
-    '''
-    date = datetime.strptime(date, "%Y%m%d")    
-    monday = date - timedelta(days=date.weekday())
-    friday = monday + timedelta(days=4)
-    monday_yyyymmdd = monday.strftime('%Y%m%d')
-    friday_yyyymmdd = friday.strftime('%Y%m%d')
-    return monday_yyyymmdd, friday_yyyymmdd
-
-def split(text: str) -> list:
-    '''
-    input: text
-    output: list of texts that is splitted by '|'
-    '''
-    return [part.strip() for part in text.split('|')]
-
-def parse_number(text: str) -> float:
-    '''
-    input: text in string format. ',' is allowed
-    output: number
-    '''
-    try:
-        return float(text.replace(',', ''))
-    except Exception:
-        return -1.0
-
-def parse_date(text: str) -> str:
-    '''
-    input: text in string format. 'YYYY-MM-DD', 'YYYY.MM.DD', or 'YYYY년 MM월 DD일' is allowed
-    output: date in string format %Y-%m-%d
-    '''
-    import re
-    if re.match(r'^\d{4}\.\d{2}\.\d{2}$', text):
-        text = text.replace('.', '-')
-    elif re.match(r'^\d{4}년\s?\d{1,2}월\s?\d{1,2}일$', text):
-        parts = re.findall(r'\d+', text)
-        y, m, d = parts[0], parts[1].zfill(2), parts[2].zfill(2)
-        text = f"{y}-{m}-{d}"
-    return datetime.strptime(text, '%Y-%m-%d').strftime('%Y-%m-%d')
-
-def unpack(rcept_no: str) -> list:
-    '''
-    input: rcept_no
-    output: list of tables in the report
-    '''
-    source_download_url = "https://opendart.fss.or.kr/api/document.xml"
-    url = f"{source_download_url}?crtfc_key={get_api_key()}&rcept_no={rcept_no}"
-    response = requests.get(url)
-    
-    all_tables = []
-    try:
-        with zipfile.ZipFile(BytesIO(response.content)) as zf:
-            file_list = zf.namelist()
-            for name in file_list:
-                with zf.open(name) as f:
-                    data = f.read()
-                    try:
-                        text = data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        print(f"Error decoding with utf-8: {name}")
-                        try:
-                            text = data.decode('cp949')
-                        except UnicodeDecodeError:
-                            print(f"Error decoding with cp949: {name}")
-                            text = None
-                    if text is not None:
-                        soup = BeautifulSoup(text, 'html.parser')
-                        tables = soup.find_all('table')
-                        all_tables.extend(tables)
-    except zipfile.BadZipFile:
-        pass
-    
-    return all_tables
-
-def full_unpack(rcept_no: str) -> str:
-    '''
-    input: rcept_no
-    output: all text content from all files in the ZIP as a single string (no empty lines, no lines that only have "-")
-    '''
-    source_download_url = "https://opendart.fss.or.kr/api/document.xml"
-    url = f"{source_download_url}?crtfc_key={get_api_key()}&rcept_no={rcept_no}"
-    response = requests.get(url)
-    all_text = ""
-    try:
-        with zipfile.ZipFile(BytesIO(response.content)) as zf:
-            file_list = zf.namelist()
-            for name in file_list:
-                with zf.open(name) as f:
-                    data = f.read()
-                    try:
-                        text = data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        print(f"Error decoding with utf-8: {name}")
-                        try:
-                            text = data.decode('cp949')
-                        except UnicodeDecodeError:
-                            print(f"Error decoding with cp949: {name}")
-                            text = None
-                    if text is not None:
-                        soup = BeautifulSoup(text, 'html.parser')
-                    for script in soup(["script", "style"]):
-                        script.decompose()
-                    file_text = soup.get_text()
-                    # Remove lines that are entirely empty or whitespace, and also lines that only have "-"
-                    filtered_lines = [
-                        line for line in file_text.splitlines()
-                        if line.strip() and line.strip() != "-"
-                    ]
-                    all_text += f"\n=== FILE: {name} ===\n"
-                    all_text += "\n".join(filtered_lines)
-                    all_text += "\n"
-    except zipfile.BadZipFile:
-        pass
-    return all_text
+from basics import *
 
 def table_to_xlsx(data):
     filtered_reports = data
@@ -241,7 +84,6 @@ def table_to_xlsx(data):
                 elif '교환가액 결정방법' in keyword_text: result_list[10] = split(row_text)[1]
                 elif '행사가액 결정방법' in keyword_text: result_list[10] = split(row_text)[1]
 
-                if '사채만기일' in keyword_text: result_list[12] = parse_date(split(row_text)[1])
                 if '사채의 이율' in keyword_text: result_list[14] = split(row_text)[2]
                 if '만기이자율' in keyword_text: result_list[15] = split(row_text)[1]
                 if '사채만기일' in keyword_text: result_list[16] = parse_date(split(row_text)[1])
@@ -249,7 +91,7 @@ def table_to_xlsx(data):
                 if '시가하락' in keyword_text: 
                     result_list[28] = parse_number(split(row_text)[2])
                     if result_list[28] == -1.0: result_list[28] = "-"
-                if '조정가액 근거' in keyword_text: result_list[29] = split(row_text)[1]
+                if '조정가액 근거' in keyword_text: result_list[29] = split(row_text)[1:]
 
                 if '주관회사' in keyword_text: result_list[26] = split(row_text)[1]
                 if '교환대상' in keyword_text: result_list[30] = split(row_text)[2]
@@ -277,6 +119,11 @@ def table_to_xlsx(data):
                 else: result_list[22] = f"{round(100 * result_list[28] / result_list[9],0)}%"
             except:
                 result_list[22] = "-"
+            
+            try:
+                result_list[23] = list_fund_participants(all_tables)
+            except Exception:
+                result_list[23] = "-"
             
             output_entries.append(result_list)
 
@@ -336,7 +183,7 @@ if __name__ == "__main__":
         to_date = sys.argv[2]
         print(f"Using dates from command line: {from_date} to {to_date}")
         
-        reports = get_weekly_reports(from_date, to_date)
+        reports = get_reports_range(from_date, to_date)
 
         filter_words = [
             '감자', '증자', '합병', '분할', '해산', '증여',
@@ -369,27 +216,3 @@ if __name__ == "__main__":
         except ImportError as e:
             print(f"Error launching GUI: {e}")
             sys.exit(1)
-
-# if __name__ == "__main__":
-#     zip_text = full_unpack("20251021000246")
-#     break_point = -1
-#     for i, line in enumerate(zip_text.splitlines()):
-#         if '특정인에 대한 대상자별 사채발행내역' in line:
-#             break_point = i
-#             break
-#     new_zip_text = zip_text.splitlines()[break_point:]
-
-#     fund_indices = [i for i, line in enumerate(new_zip_text) if '본건 펀드' in line]
-#     split_sections = []
-#     if fund_indices:
-#         for idx, start_idx in enumerate(fund_indices):
-#             # The start of this section is at '본건 펀드'
-#             section_start = start_idx
-#             if idx + 1 < len(fund_indices):
-#                 section_end = fund_indices[idx + 1]
-#             else:
-#                 section_end = len(new_zip_text)
-#             split_sections.append(new_zip_text[section_start:section_end])
-#         new_zip_text = split_sections
-#     for section in new_zip_text:
-#         print(section)

@@ -7,11 +7,7 @@ import sys
 import os
 import re
 
-def resource_dir():
-    # Where resources live (config.json) for script vs frozen EXE
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+from basics import resource_dir
 
 # Fix DPI scaling issues on Windows
 try:
@@ -291,7 +287,7 @@ class DateRangeGUI:
             import main
             
             # Run the data processing
-            reports = main.get_weekly_reports(from_date, to_date)
+            reports = main.get_reports_range(from_date, to_date)
             
             filter_words = [
                 '감자', '증자', '합병', '분할', '해산', '증여',
