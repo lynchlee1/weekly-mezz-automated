@@ -95,6 +95,7 @@ def group_by_corp_code():
                 "rm": report.get("rm")
             }
             cleaned_reports.append(cleaned_report)
+        cleaned_reports.sort(key=lambda x: x.get("rcept_dt", ""), reverse=True)
         
         grouped_data[corp_code] = {
             **company_info,
